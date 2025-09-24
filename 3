@@ -1,0 +1,70 @@
+from machine import Pin, PWM
+import time
+
+# === IR Sensors ===
+ir_pins = [Pin(i, Pin.IN) for i in range(2, 7)]  # GP2-GP6
+
+# === Motor Driver Pins ===
+# Left Motor
+AIN1 = Pin(10, Pin.OUT)
+AIN2 = Pin(11, Pin.OUT)
+PWMA = PWM(Pin(12))
+PWMA.freq(1000)
+
+# Right Motor
+BIN1 = Pin(13, Pin.OUT)
+BIN2 = Pin(14, Pin.OUT)
+PWMB = PWM(Pin(15))
+PWMB.freq(1000)
+
+# === Motor Functions ===
+def set_motor(left_speed, right_speed):
+    # left motor
+    if left_speed > 0:
+        AIN1.value(1)
+        AIN2.value(0)
+    elif left_speed < 0:
+        AIN1.value(0)
+        AIN2.value(1)
+    else:
+        AIN1.value(0)
+        AIN2.value(0)
+    PWMA.duty_u16(int(min(abs(left_speed), 65535)))
+
+    # right motor
+    if right_speed > 0:
+        BIN1.value(1)
+        BIN2.value(0)
+    elif right_speed < 0:
+        BIN1.value(0)
+        BIN2.value(1)
+    else:
+        BIN1.value(0)
+        BIN2.value(0)
+    PWMB.duty_u16(int(min(abs(right_speed), 65535)))
+
+# === Main Loop ===
+MAX_SPEED = 50000   # try 50000 (about 75% of full PWM)
+TURN_SPEED = 30000  # slower on one side for turns
+
+while True:
+    sensors = [pin.value() for pin in ir_pins]
+    print("Sensors:", sensors)  # Debug: see values in REPL
+
+    # Example sensor order: [leftmost, ..., rightmost]
+    leftmost, left, middle, right, rightmost = sensors
+
+    if middle == 0:  
+        # On track → go straight
+        set_motor(MAX_SPEED, MAX_SPEED)
+    elif left == 0 or leftmost == 0:  
+        # Line on left → turn left
+        set_motor(TURN_SPEED, MAX_SPEED)
+    elif right == 0 or rightmost == 0:  
+        # Line on right → turn right
+        set_motor(MAX_SPEED, TURN_SPEED)
+    else:
+        # Lost line → stop or search
+        set_motor(0, 0)
+
+    time.sleep(0.01)
