@@ -1,0 +1,89 @@
+from machine import Pin, PWM
+from time import sleep
+
+# --- Motor Pins ---
+# Left Motor
+AIN1 = Pin(10, Pin.OUT)
+AIN2 = Pin(11, Pin.OUT)
+PWMA = PWM(Pin(12))
+PWMA.freq(1000)
+
+# Right Motor
+BIN1 = Pin(13, Pin.OUT)
+BIN2 = Pin(14, Pin.OUT)
+PWMB = PWM(Pin(15))
+PWMB.freq(1000)
+
+# --- IR Sensors (Digital) ---
+IR1 = Pin(2, Pin.IN)  # Leftmost
+IR2 = Pin(3, Pin.IN)
+IR3 = Pin(4, Pin.IN)
+IR4 = Pin(5, Pin.IN)
+IR5 = Pin(6, Pin.IN)  # Rightmost
+
+# --- Motor Control Functions ---
+def left_motor(forward, speed):
+    AIN1.value(1 if forward else 0)
+    AIN2.value(0 if forward else 1)
+    PWMA.duty_u16(speed)
+
+def right_motor(forward, speed):
+    BIN1.value(1 if forward else 0)
+    BIN2.value(0 if forward else 1)
+    PWMB.duty_u16(speed)
+
+def stop_motors():
+    PWMA.duty_u16(0)
+    PWMB.duty_u16(0)
+
+# --- Parameters ---
+MAX_SPEED = 60000  # Full speed (adjust to 65535 if stable)
+TURN_SPEED = 40000
+SLOW_SPEED = 30000
+SEARCH_SPEED = 25000
+
+# --- Main Loop ---
+def follow_line():
+    while True:
+        # Read IR sensor values (0 = black, 1 = white)
+        sensors = [IR1.value(), IR2.value(), IR3.value(), IR4.value(), IR5.value()]
+        pattern = ''.join(str(val) for val in sensors)
+
+        # Debug: print sensor pattern (comment out when not needed)
+        # print("Sensor Pattern:", pattern)
+
+        # Decision logic
+        if pattern == "00100" or pattern == "01110":
+            # Line is centered
+            left_motor(True, MAX_SPEED)
+            right_motor(True, MAX_SPEED)
+
+        elif pattern in ("01100", "01000", "00110"):
+            # Line is slightly to the left
+            left_motor(True, SLOW_SPEED)
+            right_motor(True, MAX_SPEED)
+
+        elif pattern in ("00010", "00011", "00110"):
+            # Line is slightly to the right
+            left_motor(True, MAX_SPEED)
+            right_motor(True, SLOW_SPEED)
+
+        elif pattern in ("00001", "10000", "11000"):
+            # Line is hard right
+            left_motor(True, MAX_SPEED)
+            right_motor(False, TURN_SPEED)
+
+        elif pattern in ("00000",):
+            # Line is lost — spin in place to search
+            left_motor(True, SEARCH_SPEED)
+            right_motor(False, SEARCH_SPEED)
+
+        else:
+            # Default forward
+            left_motor(True, MAX_SPEED)
+            right_motor(True, MAX_SPEED)
+
+        sleep(0.005)  # Small delay for fast response
+
+# --- Start the robot ---
+follow_line()
