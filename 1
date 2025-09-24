@@ -1,0 +1,92 @@
+from machine import Pin, PWM
+from time import sleep
+
+# --- Motor Pins ---
+# Left Motor
+AIN1 = Pin(10, Pin.OUT)
+AIN2 = Pin(11, Pin.OUT)
+PWMA = PWM(Pin(12))
+PWMA.freq(1000)
+
+# Right Motor
+BIN1 = Pin(13, Pin.OUT)
+BIN2 = Pin(14, Pin.OUT)
+PWMB = PWM(Pin(15))
+PWMB.freq(1000)
+
+# --- IR Sensor Pins (Digital Read) ---
+IR = [
+    Pin(2, Pin.IN),  # Leftmost
+    Pin(3, Pin.IN),
+    Pin(4, Pin.IN),
+    Pin(5, Pin.IN),
+    Pin(6, Pin.IN)   # Rightmost
+]
+
+# --- Motor Control Functions ---
+def left_motor(forward, speed):
+    AIN1.value(1 if forward else 0)
+    AIN2.value(0 if forward else 1)
+    PWMA.duty_u16(speed)
+
+def right_motor(forward, speed):
+    BIN1.value(1 if forward else 0)
+    BIN2.value(0 if forward else 1)
+    PWMB.duty_u16(speed)
+
+def stop_motors():
+    PWMA.duty_u16(0)
+    PWMB.duty_u16(0)
+
+# --- Main Loop ---
+MAX_SPEED = 60000  # Max PWM value (0 to 65535)
+
+def read_sensors():
+    return [sensor.value() for sensor in IR]
+
+def follow_line():
+    while True:
+        sensors = read_sensors()
+        print("Sensors:", sensors)
+
+        # Convert sensor array to pattern
+        pattern = ''.join(str(x) for x in sensors)
+
+        if pattern == '11111':
+            # All white — stop or search
+            stop_motors()
+
+        elif pattern in ['00100', '01110']:
+            # Line centered — move forward fast
+            left_motor(True, MAX_SPEED)
+            right_motor(True, MAX_SPEED)
+
+        elif pattern in ['01100', '01000', '00110']:
+            # Line slightly to left — turn left
+            left_motor(True, int(MAX_SPEED * 0.4))
+            right_motor(True, MAX_SPEED)
+
+        elif pattern in ['00010', '00011', '00110']:
+            # Line slightly to right — turn right
+            left_motor(True, MAX_SPEED)
+            right_motor(True, int(MAX_SPEED * 0.4))
+
+        elif pattern in ['00001', '10000', '11000']:
+            # Hard right or hard left
+            left_motor(True, MAX_SPEED)
+            right_motor(False, int(MAX_SPEED * 0.5))  # spin turn
+
+        elif pattern in ['00000']:
+            # Lost line
+            stop_motors()
+            sleep(0.1)  # Optional pause
+
+        else:
+            # Default forward
+            left_motor(True, MAX_SPEED)
+            right_motor(True, MAX_SPEED)
+
+        sleep(0.01)  # Small delay for stability
+
+# Run
+follow_line()
